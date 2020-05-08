@@ -1,8 +1,8 @@
 ---
-tags: [authentication, django]
+tags: [AbstractBaseUser, AbstractUser, authentication, django, UserAdmin, UserChangeForm, UserCreationForm]
 title: Django Authentication
 created: '2020-04-18T06:52:02.813Z'
-modified: '2020-04-18T16:11:14.302Z'
+modified: '2020-04-18T17:05:58.753Z'
 ---
 
 # Django Authentication
@@ -257,8 +257,96 @@ User = get_user_model()
 
 class UserCreationForm(forms.ModelForm):
   """
-    A form for creating 
+    A form for creating new users
   """
+  password1 = forms.CharField(label='Password', widget=forms.PasswordInput)
+  password2 = forms.CharField(label='Password Confirmation', widget=forms.PasswordInput)
+
+  class Meta:
+    model = User
+    fields = ('email')
+
+  def clean_password2(self):
+    password1 = self.cleaned_data.get("password1")
+    password2 = self.cleaned_data.get("password2)
+
+    if password1 and password2 and password1 != password2
+      raise forms.ValidationError('Password didn't match')
+
+    return password2
+
+  def save(self, commit=True):
+    user = super().save(commit=False) # create, but don't save the new user in database
+    user.set_password(self.cleaned_data.get('password1'))
+
+    if commit:
+      user.save()
+    return user
+
+
+  class UserChangeForm(forms.ModelForm):
+    """
+      A form to update user with all fields but replaces password field
+      with admin's password hash display field
+    """
+      password = ReadOnlyPasswordHashField()
+
+      class Meta:
+        model = User
+        fields = ('email', 'is_active', 'is_staff', 'is_superuser')
+
+      def clean_password(self):
+        """
+          regardless of what user provides, return the initial vale
+          this is done here, rather than on field because field has 
+          not access to intial value
+        """
+        return self.initial['password']
+```
+
+*admin.py*
+
+```python
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import Group
+from django.contrib.auth import get_user_model
+
+from .forms import UserChangeForm, UserCreationForm
+
+User = get_user_model()
+
+class UserAdmin(BaseUserAdmin):
+  form = UserChangeForm
+  add_form = UserCreationForm
+
+  # The fields to be used in displaying the User model.
+  # These override the definitions on the base UserAdmin
+  # that reference specific fields on auth.User.
+  list_display = ('email', 'date_of_birth', 'is_admin')
+  list_filter = ('is_admin',)
+  fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Personal info', {'fields': ('date_of_birth',)}),
+        ('Permissions', {'fields': ('is_admin',)}),
+    )
+  # add_fieldsets is not a standard ModelAdmin attribute. UserAdmin
+  # overrides get_fieldsets to use this attribute when creating a user.
+  add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'date_of_birth', 'password1', 'password2')}
+        ),
+    )
+  search_fields = ('email',)
+  ordering = ('email',)
+  filter_horizontal = ()
+
+admin.site.register(User, UserAdmin)
+
+# unregister the Group model from admin.
+admin.site.unregister(Group)
+
 ```
 
 <details> <summary>Full AbstractUser with methods</summary>
